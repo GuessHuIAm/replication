@@ -1,9 +1,48 @@
-import grpc
-import chat_pb2_grpc as pb2_grpc
-import chat_pb2 as pb2
 import threading
-import inquirer
 from ipaddress import ip_address
+
+import chat_pb2 as pb2
+import chat_pb2_grpc as pb2_grpc
+import grpc
+import inquirer
+import re
+from constants import *
+
+
+def validate_input(input):
+    """Validates that an input string doesn't contain illegal characters"""
+    for i in ILLEGAL_CHARS:
+        if i in input:
+            raise inquirer.errors.ValidationError("", reason=f"Your input cannot contain the character '{i}'.")
+    return True
+
+
+def validate_ip(addr):
+    """Validates an IP address without noisy ValueError"""
+    try:
+        ip_address(addr)
+    except:
+        raise inquirer.errors.ValidationError("", reason=f"Your input is not an IPV4 or IPV6 address.")
+    return True
+
+
+def validate_user(username, client):
+    """Validates that a username conforms to input requirements and
+       reflects an existing user, using client to call server"""
+    validate_input(username)
+    result = client.list_accounts(username)
+    if str(result).find(f"\"{username}\"") == -1:
+        raise inquirer.errors.ValidationError("", reason=f"\"{username}\" is not an existing user.")
+    return True
+
+
+def validate_regex(search_term):
+    """Validates that a regex is valid"""
+    try:
+        re.compile(search_term)
+    except:
+        raise inquirer.errors.ValidationError("", reason=f"Your input is not a valid regex.")
+    return True
 
 
 class ChatClient:
@@ -14,13 +53,28 @@ class ChatClient:
         Args:
         - addr (str): IP address of the host.
         """
-        self.host = addr
-        self.server_port = 50051
 
-        self.channel = grpc.insecure_channel(
-            '{}:{}'.format(self.host, self.server_port))
+        # Define stubs
+        self.stubs = [
+            pb2_grpc.ChatStub(grpc.insecure_channel(f'{addr}:{PRIMARY_PORT}')),
+            pb2_grpc.ChatStub(grpc.insecure_channel(f'{REP_1_HOST}:{REP_1_PORT}')),
+            pb2_grpc.ChatStub(grpc.insecure_channel(f'{REP_2_HOST}:{REP_2_PORT}'))
+        ]
+        self.num_replicas = len(self.stubs)
 
-        self.stub = pb2_grpc.ChatStub(self.channel)
+        # Determine primary stub
+        self.primary_index = 0
+        for i in range(self.num_replicas):
+            try:
+                s = self.stubs[i]
+                s.Heartbeat(pb2.NoParam())
+                self.stub = s
+                self.primary_index = i
+                break
+            except grpc._channel._InactiveRpcError:
+                pass
+        print(f'Replica {self.primary_index} chosen as primary')
+
 
     def create_account(self, username, password):
         """
@@ -113,23 +167,38 @@ class ChatClient:
         - username (str): The username of the account to listen for messages on.
         """
         account = pb2.Account(username=username)
-        messages = self.stub.ListenMessages(account)
-        for msg in messages:
-            format = f'''
-            ______________________________________________________________
-            New message from {msg.source}:
-            {msg.text}
-            ______________________________________________________________
-            '''
-            print(format)
+        try:
+            messages = self.stub.ListenMessages(account)
+            for msg in messages:
+                format = f'''
+                ______________________________________________________________
+                New message from {msg.source}:
+                {msg.text}
+                ______________________________________________________________
+                '''
+                print(format)
+
+        # TODO: FIX!!!
+        except grpc._channel._MultiThreadedRendezvous:
+            self.primary_index = (self.primary_index + 1) % self.num_replicas
+            self.stub = self.stubs[self.primary_index]
+            print(f'Switched to replica {self.primary_index} as primary.')
+            self.listen_messages(username)
 
 
 def login_ui(client):
     """Login UI for the chat client."""
-    
+
     questions = [
-        inquirer.Text('username', message="What is your name?"),
-        inquirer.Password('password', message="What is your password?")
+        inquirer.Text(
+            'username',
+            message="What is your name?",
+            validate=lambda _, x: validate_input(x)
+        ),
+        inquirer.Password(
+            'password',
+            message="What is your password?"
+        )
     ]
     answers = inquirer.prompt(questions)
     result = client.create_account(username=answers['username'], password=answers['password'])
@@ -167,11 +236,11 @@ if __name__ == '__main__':
     th = None
     # Get the IP address of the chat server from the user
     questions = [inquirer.Text('ip', message="What's the server's IP address?",
-                    validate=lambda _, x: ip_address(x))]
+                    validate=lambda _, x: validate_ip(x))]
 
     answers = inquirer.prompt(questions, raise_keyboard_interrupt=True)
     addr = answers['ip']
-    
+
     client = ChatClient(addr)
     # Prompt the user to log in
     username, password = login_ui(client)
@@ -197,21 +266,26 @@ if __name__ == '__main__':
             question = [
                     inquirer.Text(
                         'query',
-                        message='Provide a regular expression'
+                        message='Provide a regular expression',
+                        validate=lambda _, x: validate_regex(x)
                     )
                 ]
             regex = inquirer.prompt(question)['query']
 
             # Call the list_accounts method on the ChatClient instance and print the result
-            result = client.list_accounts(regex)
-            print(f'{result}')
+            try:
+                result = client.list_accounts(regex)
+                print(f'{result}')
+            except grpc._channel._InactiveRpcError:
+                print('The regular expression you entered was invalid')
 
         elif answers['action'] == "Send message":
             # Ask the user for the recipient and message text
             msg_questions = [
                 inquirer.Text(
                     'recipient',
-                    message='Who would you like to send a message to?'
+                    message='Who would you like to send a message to?',
+                    validate=lambda _, x: validate_user(x, client)
                 ),
                 inquirer.Text(
                     'message',
@@ -222,7 +296,7 @@ if __name__ == '__main__':
             destination, text = answers['recipient'], answers['message']
             # Call the send_message method on the ChatClient instance and print the result
             result = client.send_message(destination=destination, source=username, text=text)
-            print(f'{result}')
+            print('Message sent successfully!')
 
         elif answers['action'] == "Logout":
             # Confirm that the user wants to log out
@@ -232,11 +306,7 @@ if __name__ == '__main__':
                 # Call the logout method on the ChatClient instance
                 client.logout(username=username)
                 print("Successfully logged out")
-                # Prompt the user to log in again
-                username, password = login_ui(client)
-                # Start a new thread to listen for incoming messages
-                th = threading.Thread(target=client.listen_messages, args=(username,))
-                th.start()
+                exit(0)
             else:
                 pass
 
@@ -246,18 +316,14 @@ if __name__ == '__main__':
             confirmation = inquirer.prompt(delete_question)['delete']
             if confirmation:
                 # Call the delete_account method on the ChatClient instance
-                delete_question = [inquirer.Password('password', message="Password:"),]
+                delete_question = [inquirer.Password('password', message="Password"),]
                 password = inquirer.prompt(delete_question)['password']
                 result = client.delete_account(username=username, password=password)
                 if result.error == True:
                     print(result.message)
                 else:
                     print("Successfully deleted")
-                    # Prompt the user to log in again
-                    username, password = login_ui(client)
-                    # Start a new thread to listen for incoming messages
-                    th = threading.Thread(target=client.listen_messages, args=(username,))
-                    th.start()
+                    exit(0)
         else:
             print("Invalid action")
 

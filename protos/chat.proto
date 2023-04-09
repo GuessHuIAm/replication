@@ -9,6 +9,7 @@ service Chat{
     rpc ListAccounts(SearchTerm) returns (Accounts) {}
     rpc SendMessage(MessageInfo) returns (ServerResponse) {}
     rpc ListenMessages(Account) returns (stream MessageInfo) {}
+    rpc Heartbeat(NoParam) returns (NoParam) {}
 }
 
 message NoParam {

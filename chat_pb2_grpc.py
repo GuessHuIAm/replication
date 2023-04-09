@@ -49,6 +49,11 @@ class ChatStub(object):
                 request_serializer=chat__pb2.Account.SerializeToString,
                 response_deserializer=chat__pb2.MessageInfo.FromString,
                 )
+        self.Heartbeat = channel.unary_unary(
+                '/Chat/Heartbeat',
+                request_serializer=chat__pb2.NoParam.SerializeToString,
+                response_deserializer=chat__pb2.NoParam.FromString,
+                )
 
 
 class ChatServicer(object):
@@ -96,6 +101,12 @@ class ChatServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Heartbeat(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ChatServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -133,6 +144,11 @@ def add_ChatServicer_to_server(servicer, server):
                     servicer.ListenMessages,
                     request_deserializer=chat__pb2.Account.FromString,
                     response_serializer=chat__pb2.MessageInfo.SerializeToString,
+            ),
+            'Heartbeat': grpc.unary_unary_rpc_method_handler(
+                    servicer.Heartbeat,
+                    request_deserializer=chat__pb2.NoParam.FromString,
+                    response_serializer=chat__pb2.NoParam.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -260,5 +276,22 @@ class Chat(object):
         return grpc.experimental.unary_stream(request, target, '/Chat/ListenMessages',
             chat__pb2.Account.SerializeToString,
             chat__pb2.MessageInfo.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def Heartbeat(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/Chat/Heartbeat',
+            chat__pb2.NoParam.SerializeToString,
+            chat__pb2.NoParam.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
