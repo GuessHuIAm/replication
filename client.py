@@ -1,11 +1,13 @@
+import re
 import threading
 from ipaddress import ip_address
+from textwrap import dedent
+
+import grpc
+import inquirer
 
 import chat_pb2 as pb2
 import chat_pb2_grpc as pb2_grpc
-import grpc
-import inquirer
-import re
 from constants import *
 
 
@@ -170,12 +172,12 @@ class ChatClient:
         try:
             messages = self.stub.ListenMessages(account)
             for msg in messages:
-                format = f'''
+                format = dedent(f'''
                 ______________________________________________________________
                 New message from {msg.source}:
                 {msg.text}
                 ______________________________________________________________
-                '''
+                ''')
                 print(format)
 
         # TODO: FIX!!!
