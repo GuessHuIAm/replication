@@ -6,12 +6,12 @@ For simplicity and robustness, we chose to implement a **Primary-Secondary** Rep
 ## Leader Election ##
 Leader election is done in order of lowest index. I.e., the lowest-indexed replica available is chosen to be the primary, and both the client and secondary replicas maintain a continuous heartbeat with the primary replica, transitioning to the next replica in line in the event that a response is not detected from the primary.
 
-Secondary replicas maintain a consistent heartbeat with the primary 
+Secondary replicas maintain a consistent heartbeat with the primary by using the `Heartbeat` rpc, which simply involves the transfer of a `NoParam` message between both replicas to signify successful interprocess communication. Once secondary replicas fail to receive a `NoParam` message response from the primary replica, each secondary replica moves on to declaring the next available replica (lowest-indexed process that returns a heartbeat check) as the primary. The failure to receive a `NoParam` message response from a primary replica that has failed is done by catching an `grpc._channel._InactiveRpcError`.
 
-The client maintains a continuous heartbeat with the primary server through the `ListenMessages` rpc, which continuously yields messages to the client. When the client detects a `grpc._channel._MultiThreadedRendezvous` exception, we know that the current primary replica is down, so a new primary replica is done through the following process: 
+The client maintains a continuous heartbeat with the primary server through the `ListenMessages` rpc, which continuously yields messages to the client. When the client detects a `grpc._channel._MultiThreadedRendezvous` exception, we know that the current primary replica is down, so a new primary replica is chosen through the identical process to the heartbeat mechanism implemented by the secondary replicas. That is, it selects the next available replica (lowest-indexed; availabity ensured through a `Heartbeat` ping) as the replica it will now begin communicating with.
 
 ## Persistence ##
-We chose to persist our chat application using a MySQL server. We chose to use MySQL over SQLite or simply serializing all of the vital
+We chose to persist our chat application using a MySQL server. We chose to use MySQL over SQLite or simply serializing all pertinent data structures into JSON format because of MySQL's compatibility with multiple machines as well as its robustness and capability for incremental updates, rather than having to rewrite the entire JSON file every time information needed to be persisted.
 
 ## Other Improvements Over Original ##
 We decided to augment our original gRPC implementation, and some additional improvements include comprehensive validation of inputs such as usernames, IP addresses, and regular expressions; enhanced error handling so that user error does not result in the application crashing in tandem with a noisy, verbose error message in the terminal.
@@ -19,10 +19,10 @@ We decided to augment our original gRPC implementation, and some additional impr
 ## Code Organization ##
 - Constants
 
-    For enhanced modularity and customizability, we stored vital constants in the `constants.py` file, containing constants such as the host and ports of each of the replicas as well as a set of illegal characters that user input is validated against to prevent injection attacks with SQL commands,
+    For enhanced modularity and customizability, we stored vital constants in the `constants.py` file, containing constants such as the host and ports of each of the replicas as well as a set of illegal characters that user input is validated against to prevent injection attacks with SQL commands as well as interfering with regular expression matching functionality.
 
 ## Testing ##
 - Unit Testing
 
 - Integration Testing
-Manual testing of primary replica failure was done by programmatically terminating replicas by using the `Process.terminate()`
+Manual testing of primary replica failure was done by programmatically terminating replicas by using the `Process.terminate()` and demonstrating that no gap in functionality occurred on the client's end, given that one replica was still functional. An additional test proving synchronization of data was done by creating new accounts when Replica 0 had already failed and Replica 1 became primary, then terminating Replica 1 (thus rendering Replica 2 the new primary), and ensuring that the accounts made previously were still recognized as registered, not new, users.
