@@ -13,7 +13,7 @@ DB_NAME = 'replication_chat'
 
 DATABASE = {
     'user': 'root',
-    'password': 'michaelhu',
+    #'password': '',
     'database': DB_NAME,
     'host': 'localhost',
 }

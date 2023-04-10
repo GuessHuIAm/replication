@@ -54,7 +54,7 @@ class ChatService(pb2_grpc.ChatServicer):
             self.conn.commit()
             result = f"Account creation success: '{username}' added."
             response = {'message': result, 'error': False}
-        else:
+        except:
             result = "Error: Username already in use"
             response = {'message': result, 'error': True}
 
