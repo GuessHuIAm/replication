@@ -57,28 +57,19 @@ class ChatClient:
         """
 
         # Define stubs
-        self.stubs = [
+        self.STUBS = [
             pb2_grpc.ChatStub(grpc.insecure_channel(f'{addr}:{PRIMARY_PORT}')),
             pb2_grpc.ChatStub(grpc.insecure_channel(f'{REP_1_HOST}:{REP_1_PORT}')),
             pb2_grpc.ChatStub(grpc.insecure_channel(f'{REP_2_HOST}:{REP_2_PORT}'))
         ]
-        self.num_replicas = len(self.stubs)
-
-        # Determine primary stub
+        self.NUM_REPLICAS = len(self.STUBS)
+        
         self.primary_index = 0
-        for i in range(self.num_replicas):
-            try:
-                s = self.stubs[i]
-                s.Heartbeat(pb2.NoParam())
-                self.stub = s
-                self.primary_index = i
-                break
-            except grpc._channel._InactiveRpcError:
-                pass
+        self.determine_primary()
         print(f'Replica {self.primary_index} chosen as primary')
 
 
-    def create_account(self, username, password):
+  def create_account(self, username, password):
         """
         Create a new account with the specified username and password.
 
@@ -90,7 +81,7 @@ class ChatClient:
         - A pb2.ServerResponse object representing the result of the operation.
         """
         account = pb2.Account(username=username, password=password)
-        return self.stub.CreateAccount(account)
+        return self.stuSTUBSeateAccount(account)
 
     def delete_account(self, username, password):
         """
@@ -104,7 +95,7 @@ class ChatClient:
         - A pb2.ServerResponse object representing the result of the operation.
         """
         account = pb2.Account(username=username, password=password)
-        return self.stub.DeleteAccount(account)
+        return self.stuSTUBSleteAccount(account)
 
     def login(self, username, password):
         """
@@ -118,7 +109,7 @@ class ChatClient:
         - A pb2.ServerResponse object representing the result of the operation.
         """
         account = pb2.Account(username=username, password=password)
-        return self.stub.Login(account)
+        return self.stuSTUBSgin(account)
 
     def logout(self, username):
         """
@@ -131,7 +122,7 @@ class ChatClient:
         - A pb2.ServerResponse object representing the result of the operation.
         """
         account = pb2.Account(username=username, password="")
-        return self.stub.Logout(account)
+        return self.stuSTUBSgout(account)
 
     def list_accounts(self, searchterm):
         """
@@ -144,7 +135,7 @@ class ChatClient:
         - A pb2.Accounts object representing the accounts list.
         """
         search_term = pb2.SearchTerm(searchterm=searchterm)
-        return self.stub.ListAccounts(search_term)
+        return self.stuSTUBSstAccounts(search_term)
 
     def send_message(self, destination, source, text):
         """
@@ -159,7 +150,7 @@ class ChatClient:
         - A pb2.ServerResponse object representing the result of the operation.
         """
         message_info = pb2.MessageInfo(destination=destination, source=source, text=text)
-        return self.stub.SendMessage(message_info)
+        return self.stuSTUBSndMessage(message_info)
 
     def listen_messages(self, username):
         """
@@ -170,7 +161,7 @@ class ChatClient:
         """
         account = pb2.Account(username=username)
         try:
-            messages = self.stub.ListenMessages(account)
+            messages = self.stuSTUBSstenMessages(account)
             for msg in messages:
                 format = dedent(f'''
                 ______________________________________________________________
@@ -180,15 +171,33 @@ class ChatClient:
                 ''')
                 print(format)
 
-        # TODO: FIX!!!
-        except grpc._channel._MultiThreadedRendezvous:
-            self.primary_index = (self.primary_index + 1) % self.num_replicas
-            self.stub = self.stubs[self.primary_index]
-            print(f'Switched to replica {self.primary_index} as primary.')
+        # If we encounter a MultiThreadedRendezvous exception, we know that the current primary replica has gone down
+  
+        # So we determine a new primary replica      except grpc._channel._MultiThreadedRendezvous:
+            # Iself.determine_primary()          print(f'Switched to replica {self.primary_index} as primary.')
             self.listen_messages(username)
 
 
-def login_ui(client):
+
+                        
+    def determine_primary(self):
+        """
+        Determines primary server stub.
+        """
+        while self.primary_index < self.NUM_REPLICAS:
+            # Send heartbeat to each of the server stubs, and if they are unresponsive, move to the next
+            try:
+                s = self.STUBS[self.primary_index]
+                s.Heartbeat(pb2.NoParam())
+                self.STUBS = s
+                break
+            except grpc._channel._InactiveRpcError:
+                self.primary_index += 1
+
+        # If all servers down, exit with error
+        if self.primary_index == self.NUM_REPLICAS:
+            print("We're sorry, all of our servers are down. Please try again later.")
+            exit(1)def login_ui(client):
     """Login UI for the chat client."""
 
     questions = [
