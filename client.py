@@ -69,7 +69,7 @@ class ChatClient:
         print(f'Replica {self.primary_index} chosen as primary')
 
 
-  def create_account(self, username, password):
+    def create_account(self, username, password):
         """
         Create a new account with the specified username and password.
 
@@ -176,9 +176,6 @@ class ChatClient:
         # So we determine a new primary replica      except grpc._channel._MultiThreadedRendezvous:
             # Iself.determine_primary()          print(f'Switched to replica {self.primary_index} as primary.')
             self.listen_messages(username)
-
-
-
                         
     def determine_primary(self):
         """
