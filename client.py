@@ -51,7 +51,6 @@ class ChatClient:
     def __init__(self, addr):
         """
         Initialize the ChatClient instance.
-
         Args:
         - addr (str): IP address of the host.
         """
@@ -63,99 +62,86 @@ class ChatClient:
             pb2_grpc.ChatStub(grpc.insecure_channel(f'{REP_2_HOST}:{REP_2_PORT}'))
         ]
         self.NUM_REPLICAS = len(self.STUBS)
-        
+
         self.primary_index = 0
         self.determine_primary()
-        print(f'Replica {self.primary_index} chosen as primary')
+        print(f'Replica {self.primary_index} is chosen as the primary server.')
 
 
     def create_account(self, username, password):
         """
         Create a new account with the specified username and password.
-
         Args:
         - username (str): The username for the new account.
         - password (str): The password for the new account.
-
         Returns:
         - A pb2.ServerResponse object representing the result of the operation.
         """
         account = pb2.Account(username=username, password=password)
-        return self.stuSTUBSeateAccount(account)
+        return self.stub.CreateAccount(account)
 
     def delete_account(self, username, password):
         """
         Delete the account with the specified username and password.
-
         Args:
         - username (str): The username of the account to be deleted.
         - password (str): The password of the account to be deleted.
-
         Returns:
         - A pb2.ServerResponse object representing the result of the operation.
         """
         account = pb2.Account(username=username, password=password)
-        return self.stuSTUBSleteAccount(account)
+        return self.stub.DeleteAccount(account)
 
     def login(self, username, password):
         """
         Log in to the account with the specified username and password.
-
         Args:
         - username (str): The username of the account to log in to.
         - password (str): The password of the account to log in to.
-
         Returns:
         - A pb2.ServerResponse object representing the result of the operation.
         """
         account = pb2.Account(username=username, password=password)
-        return self.stuSTUBSgin(account)
+        return self.stub.Login(account)
 
     def logout(self, username):
         """
         Log out of the account with the specified username.
-
         Args:
         - username (str): The username of the account to log out of.
-
         Returns:
         - A pb2.ServerResponse object representing the result of the operation.
         """
         account = pb2.Account(username=username, password="")
-        return self.stuSTUBSgout(account)
+        return self.stub.logout(account)
 
     def list_accounts(self, searchterm):
         """
         Get a list of accounts that match the specified search term.
-
         Args:
         - searchterm (str): The search term to use.
-
         Returns:
         - A pb2.Accounts object representing the accounts list.
         """
         search_term = pb2.SearchTerm(searchterm=searchterm)
-        return self.stuSTUBSstAccounts(search_term)
+        return self.stub.ListAccounts(search_term)
 
     def send_message(self, destination, source, text):
         """
         Send a message to the specified destination.
-
         Args:
         - destination (str): The username of the message recipient.
         - source (str): The username of the message sender.
         - text (str): The text of the message.
-
         Returns:
         - A pb2.ServerResponse object representing the result of the operation.
         """
         message_info = pb2.MessageInfo(destination=destination, source=source, text=text)
-        return self.stuSTUBSndMessage(message_info)
+        return self.stub.SendMessage(message_info)
 
     def listen_messages(self, username):
         """
         Listen for messages sent to the specified user and print them to the console.
-
         Args:
         - username (str): The username of the account to listen for messages on.
         """
@@ -172,11 +158,12 @@ class ChatClient:
                 print(format)
 
         # If we encounter a MultiThreadedRendezvous exception, we know that the current primary replica has gone down
-  
-        # So we determine a new primary replica      except grpc._channel._MultiThreadedRendezvous:
-            # Iself.determine_primary()          print(f'Switched to replica {self.primary_index} as primary.')
+        # So we determine a new primary replica
+        except grpc._channel._MultiThreadedRendezvous:
+            self.determine_primary()
+            print(f'Switched to replica {self.primary_index} as primary.')
             self.listen_messages(username)
-                        
+
     def determine_primary(self):
         """
         Determines primary server stub.
@@ -186,7 +173,7 @@ class ChatClient:
             try:
                 s = self.STUBS[self.primary_index]
                 s.Heartbeat(pb2.NoParam())
-                self.STUBS = s
+                self.stub = s
                 break
             except grpc._channel._InactiveRpcError:
                 self.primary_index += 1
@@ -194,7 +181,10 @@ class ChatClient:
         # If all servers down, exit with error
         if self.primary_index == self.NUM_REPLICAS:
             print("We're sorry, all of our servers are down. Please try again later.")
-            exit(1)def login_ui(client):
+            exit(1)
+
+
+def login_ui(client):
     """Login UI for the chat client."""
 
     questions = [
@@ -334,4 +324,3 @@ if __name__ == '__main__':
                     exit(0)
         else:
             print("Invalid action")
-
