@@ -205,7 +205,20 @@ def login_ui(client):
     answers = inquirer.prompt(questions)
     result = client.create_account(username=answers['username'], password=answers['password'])
     username, password = answers["username"], answers["password"]
-    if result.error == False:
+    print(result.message, result.error)
+    if result.error:
+        result = client.login(username=username, password=password)
+        while result.error == True:
+            print(result.message)
+            questions = [
+                inquirer.Text('username', message="Username"),
+                inquirer.Password('password', message="Password")
+            ]
+            answers = inquirer.prompt(questions)
+            username, password = answers["username"], answers["password"]
+            result = client.login(username=username, password=password)
+        print(result.message)
+    else:
         print(f'Welcome, {username}. I see this is your first time here. Confirm your password below:')
         err = True
         while err == True:
@@ -218,19 +231,6 @@ def login_ui(client):
             if err == True:
                 print(result.message)
         print(result.message)
-    else:
-        result = client.login(username=username, password=password)
-        while result.error == True:
-            print(result.message)
-            questions = [
-                inquirer.Text('username', message="Username"),
-                inquirer.Password('password', message="Password")
-            ]
-            answers = inquirer.prompt(questions)
-            username, password = answers["username"], answers["password"]
-            result = client.login(username=username, password=password)
-        print(result.message)
-
     return username, password
 
 

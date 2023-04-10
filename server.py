@@ -1,5 +1,5 @@
 import re
-import sqlite3
+import mysql.connector
 from concurrent import futures
 from multiprocessing import Process
 from time import sleep
@@ -10,9 +10,6 @@ import chat_pb2 as pb2
 import chat_pb2_grpc as pb2_grpc
 from constants import *
 
-# Associates a unique username with a password
-accounts = {}
-
 # Associates a username with a logged-in status
 accounts_status = {}
 
@@ -21,8 +18,17 @@ accounts_queue = {}
 
 class ChatService(pb2_grpc.ChatServicer):
     def __init__(self, *args, **kwargs):
-        pass
-
+        # Add database and link it to this server
+        self.conn = mysql.connector.connect(**DATABASE)
+        cursor = self.conn.cursor()
+        cursor.execute('''CREATE TABLE IF NOT EXISTS accounts
+                          (username VARCHAR(255) UNIQUE, password VARCHAR(255), status INT)''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS history
+                          (source VARCHAR(255), destination VARCHAR(255), message TEXT)''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS messages
+                          (source VARCHAR(255), destination VARCHAR(255), message TEXT)''')
+        self.conn.commit()
+        cursor.close()
 
     def CreateAccount(self, request, context):
         '''
@@ -39,11 +45,14 @@ class ChatService(pb2_grpc.ChatServicer):
 
         username = request.username
         password = request.password
-        if username not in accounts:
-            accounts[username] = password
-            accounts_status[username] = False
-            accounts_queue[username] = {}
-            result = f'{username} added'
+
+        cursor = self.conn.cursor()
+
+        # Try to insert the new account into the database, if it already exists, return an error
+        try:
+            cursor.execute('''INSERT INTO accounts VALUES (%s, %s, %s)''', (username, password, 0))
+            self.conn.commit()
+            result = f"Account creation success: '{username}' added."
             response = {'message': result, 'error': False}
         else:
             result = "Error: Username already in use"
@@ -67,13 +76,25 @@ class ChatService(pb2_grpc.ChatServicer):
 
         username = request.username
         password = request.password
-        if username not in accounts:
-            result = f'{username} is not an existing username'
-            response = {'message': result, 'error': True}
-            return pb2.ServerResponse(**response)
 
-        if password != accounts[username]:
-            result = f'Wrong password for {username}'
+        cursor = self.conn.cursor()
+
+        try:
+            cursor.execute('''DELETE FROM accounts WHERE username = %s AND password = %s''', (username, password,))
+            deleted = cursor.rowcount
+            self.conn.commit()
+
+            # If the account was deleted, return a success message
+            if deleted > 0:
+                result = f"Account deletion success: '{username}' deleted."
+                response = {'message': result, 'error': False}
+            else:
+                # If number of rows deleted is 0, then the username was incorrect
+                result = f"Account deletion error: username '{username}' not found."
+                response = {'message': result, 'error': True}
+        except:
+            # If the password was incorrect, an exception will be raised
+            result = f"Account deletion error: username '{username}' not found."
             response = {'message': result, 'error': True}
             return pb2.ServerResponse(**response)
 
@@ -99,13 +120,28 @@ class ChatService(pb2_grpc.ChatServicer):
         username = request.username
         password = request.password
 
-        if username not in accounts:
-            result = f'{username} is not a registered account.'
-            response = {'message': result, 'error': True}
-            return pb2.ServerResponse(**response)
+        cursor = self.conn.cursor()
 
-        if password != accounts[username]:
-            result = f"Incorrect password for {username}'s account."
+        # Find the account with the given username
+        cursor.execute('''SELECT * FROM accounts WHERE username = %s''', (username,))
+        account = cursor.fetchone()
+
+        if account:
+            # If the account exists, check if the password is correct
+            if password != account[1]:
+                result = f"Login error: incorrect password for '{username}'."
+                response = {'message': result, 'error': True}
+            else:
+                try:
+                    cursor.execute('''UPDATE accounts SET status = 1 WHERE username = %s''', (username,))
+                    self.conn.commit()
+                    result = f"Login success: '{username}' logged in. Welcome!"
+                    response = {'message': result, 'error': False}
+                except:
+                    result = f"Login error: '{username}' is already logged in. Please logout first."
+                    response = {'message': result, 'error': True}
+        else:
+            result = f"Login error: username '{username}' not found."
             response = {'message': result, 'error': True}
             return pb2.ServerResponse(**response)
 
@@ -126,9 +162,20 @@ class ChatService(pb2_grpc.ChatServicer):
                     pass
 
         username = request.username
-        accounts_status[username] = False
-        result = f'{username}, you are logged out'
-        response = {'message': result, 'error': False}
+        cursor = self.conn.cursor()
+
+        try:
+            # Set the status of the account to 0 (logged out)
+            cursor.execute("UPDATE accounts SET status = 0 WHERE username = %s", (username,))
+            self.conn.commit()
+            result = f"Logout success: '{username}' logged out. Goodbye!"
+            response = {'message': result, 'error': False}
+        except:
+            result = f"Logout error: something went wrong, please try again."
+            response = {'message': result, 'error': True}
+
+        cursor.close()
+
         return pb2.ServerResponse(**response)
 
 
@@ -158,6 +205,10 @@ class ChatService(pb2_grpc.ChatServicer):
         source = request.source
         text = request.text
 
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT status FROM accounts WHERE username = %s", (source,))
+        logged_in = cursor.fetchone()[0]
+
         # If the source is not logged in, return an error
         if source not in accounts or accounts_status[source] == False:
             result = "Error: username not valid or not logged in"
@@ -165,17 +216,23 @@ class ChatService(pb2_grpc.ChatServicer):
             return pb2.ServerResponse(**response)
 
         # If the destination is not a valid account, return an error
-        if destination not in accounts:
-            result = "Error: destination not valid"
+        cursor.execute("SELECT username FROM accounts WHERE username = %s", (destination,))
+        if cursor.fetchone() is None:
+            result = f"Send error: destination account '{destination}' does not exist."
             response = {'message': result, 'error': True}
             return pb2.ServerResponse(**response)
 
-        if source not in accounts_queue[destination]:
-            accounts_queue[destination][source] = [text]
-        else:
-            accounts_queue[destination][source].append(text)
-        result = "Message Sent"
-        response = {'message': result, 'error': False}
+        try:
+            # Add the message to the destination user's queue
+            cursor.execute("INSERT INTO messages VALUES (%s, %s, %s)", (destination, source, text,))
+            self.conn.commit()
+            result = f"Send success: message sent to '{destination}'."
+            response = {'message': result, 'error': False}
+        except:
+            result = "Send error: something went wrong, please try again."
+            response = {'message': result, 'error': True}
+
+        cursor.close()
 
         return pb2.ServerResponse(**response)
 
@@ -183,13 +240,24 @@ class ChatService(pb2_grpc.ChatServicer):
     def ListenMessages(self, request, context):
         username = request.username
 
-        while accounts_status[username]:
-            myDict = accounts_queue[username]
-            for sender in list(myDict):
-                for msg in myDict[sender]:
-                    response = {'destination': username, 'source': sender, 'text': msg}
-                    yield pb2.MessageInfo(**response)
-                    myDict[sender].remove(msg)
+        cursor = self.conn.cursor()
+        while True:
+            cursor.execute("SELECT status FROM accounts WHERE username = %s", (username,))
+            logged_in = cursor.fetchone()[0]
+            if logged_in == 0:
+                break
+
+            cursor.execute("SELECT source, text FROM messages WHERE destination = %s", (username,))
+            for row in cursor.fetchall():
+                source = row[0]
+                text = row[1]
+                response = {'source': source, 'text': text}
+                yield pb2.Message(**response)
+
+            cursor.execute("DELETE FROM messages WHERE receiver = %s AND source = %s AND text = %s", (username, source, text,))
+            self.conn.commit()
+
+        cursor.close()
 
 
     def Heartbeat(self, request, context):
@@ -206,7 +274,7 @@ def serve(index, server_hierarchy):
     pb2_grpc.add_ChatServicer_to_server(ChatService(), server) # Add service to server
     server.add_insecure_port(f'{host}:{port}')
     server.start()
-    print(f'Server started on {host}:{port}' + (' (Replica)' if index > 0 else ''))
+    print(f'Server started on host {host} and port {port}' + (' (Replica)' if index > 0 else ''))
 
     # Define replica stubs for primary to communicate with
     global stubs
@@ -235,7 +303,7 @@ if __name__ == '__main__':
     replica_2.start()
 
     # Uncomment below to test swapping between replicas
-    # sleep(15)
+    # sleep(10)
     # print('Primary and replica 1 been terminated, duuude')
     # primary.terminate()
     # replica_1.terminate()

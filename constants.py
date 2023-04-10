@@ -8,3 +8,12 @@ REP_2_HOST = PRIMARY_HOST  # Default port number for replica 2
 REP_2_PORT = 8002          # Default host address for replica 2
 
 ILLEGAL_CHARS = {'.', '+', '*', '?', '^', '$', '(', ')', '[', ']', '{', '}', '|', '\\'}
+
+DB_NAME = 'replication_chat'
+
+DATABASE = {
+    'user': 'root',
+    'password': 'michaelhu',
+    'database': DB_NAME,
+    'host': 'localhost',
+}
