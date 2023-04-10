@@ -2,6 +2,7 @@ import re
 import mysql.connector
 from concurrent import futures
 from multiprocessing import Process
+from threading import Thread
 from time import sleep
 
 import grpc
@@ -10,11 +11,7 @@ import chat_pb2 as pb2
 import chat_pb2_grpc as pb2_grpc
 from constants import *
 
-# Associates a username with a logged-in status
 accounts_status = {}
-
-# Associates a user with a dictionary storing senders : list of messages
-accounts_queue = {}
 
 class ChatService(pb2_grpc.ChatServicer):
     def __init__(self, *args, **kwargs):
@@ -36,8 +33,8 @@ class ChatService(pb2_grpc.ChatServicer):
         If the username already exists, an error is returned.
         '''
         # Sync with all secondary replicas if necessary
-        if is_primary:
-            for s in stubs:
+        if primary_index == index:
+            for s in STUBS[index + 1:]:
                 try:
                     s.CreateAccount(request)
                 except grpc._channel._InactiveRpcError:
@@ -54,9 +51,11 @@ class ChatService(pb2_grpc.ChatServicer):
             self.conn.commit()
             result = f"Account creation success: '{username}' added."
             response = {'message': result, 'error': False}
-        else:
-            result = "Error: Username already in use"
+        except:
+            result = f"Account creation error: username '{username}' already in use."
             response = {'message': result, 'error': True}
+
+        cursor.close()
 
         return pb2.ServerResponse(**response)
 
@@ -67,8 +66,8 @@ class ChatService(pb2_grpc.ChatServicer):
         If the username or password is incorrect, an error is returned.
         '''
         # Sync with all secondary replicas if necessary
-        if is_primary:
-            for s in stubs:
+        if primary_index == index:
+            for s in STUBS[index + 1:]:
                 try:
                     s.DeleteAccount(request)
                 except grpc._channel._InactiveRpcError:
@@ -96,11 +95,9 @@ class ChatService(pb2_grpc.ChatServicer):
             # If the password was incorrect, an exception will be raised
             result = f"Account deletion error: username '{username}' not found."
             response = {'message': result, 'error': True}
-            return pb2.ServerResponse(**response)
 
-        del(accounts[username])
-        result = f'{username} deleted'
-        response = {'message': result, 'error': False}
+        cursor.close()
+
         return pb2.ServerResponse(**response)
 
 
@@ -110,8 +107,8 @@ class ChatService(pb2_grpc.ChatServicer):
         user that is working on user's behalf looking for messages.
         '''
         # Sync with all secondary replicas if necessary
-        if is_primary:
-            for s in stubs:
+        if primary_index == index:
+            for s in STUBS[index + 1:]:
                 try:
                     s.Login(request)
                 except grpc._channel._InactiveRpcError:
@@ -143,19 +140,17 @@ class ChatService(pb2_grpc.ChatServicer):
         else:
             result = f"Login error: username '{username}' not found."
             response = {'message': result, 'error': True}
-            return pb2.ServerResponse(**response)
 
-        accounts_status[username] = True
-        result = f'{username}, you are logged in'
-        response = {'message': result, 'error': False}
+        cursor.close()
+
         return pb2.ServerResponse(**response)
 
 
     def Logout(self, request, context):
         '''Logout the client'''
         # Sync with all secondary replicas if necessary
-        if is_primary:
-            for s in stubs:
+        if primary_index == index:
+            for s in STUBS[index + 1:]:
                 try:
                     s.Logout(request)
                 except grpc._channel._InactiveRpcError:
@@ -183,19 +178,28 @@ class ChatService(pb2_grpc.ChatServicer):
         '''Lists the available accounts'''
         searchterm = request.searchterm
         pattern = re.compile(searchterm)
+
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT username FROM accounts")
+        results = cursor.fetchall()
+        cursor.close()
+
+        accounts = [r[0] for r in results]
         accounts_str = ""
         for account in accounts:
-            if pattern.search(account) != None:
+            if pattern.search(account) is not None:
                 accounts_str += account + " "
+
         response = {'usernames': accounts_str[:-1]}
+
         return pb2.Accounts(**response)
 
 
     def SendMessage(self, request, context):
         '''Puts message into the destination user's queue'''
         # Sync with all secondary replicas if necessary
-        if is_primary:
-            for s in stubs:
+        if primary_index == index:
+            for s in STUBS[index + 1:]:
                 try:
                     s.SendMessage(request)
                 except grpc._channel._InactiveRpcError:
@@ -210,8 +214,8 @@ class ChatService(pb2_grpc.ChatServicer):
         logged_in = cursor.fetchone()[0]
 
         # If the source is not logged in, return an error
-        if source not in accounts or accounts_status[source] == False:
-            result = "Error: username not valid or not logged in"
+        if logged_in == 0:
+            result = "Send error: you must be logged in to send messages."
             response = {'message': result, 'error': True}
             return pb2.ServerResponse(**response)
 
@@ -264,11 +268,33 @@ class ChatService(pb2_grpc.ChatServicer):
         return pb2.NoParam()
 
 
-def serve(index, server_hierarchy):
-    # Flag stating whether the replica is the primary one
-    global is_primary
-    is_primary = index == 0
+def heartbeat_primary():
+    """
+    Function that pings primary replica and determines whether it is still
+    functioning. If the primary is no longer functional, the next lowest-indexed
+    replica that responds is selected.
+    """
+    global primary_index
+    while primary_index < index:
+        try:
+            STUBS[primary_index].Heartbeat(pb2.NoParam())
+        except grpc._channel._InactiveRpcError:
+            primary_index += 1
 
+    # If a replica exits the loop, we know that it has become the primary replica
+    print(f'Replica {index} is now the primary replica')
+
+
+def serve(i, server_hierarchy):
+    # Index of the primary replica (initialized to 0)
+    global primary_index
+    primary_index = 0
+
+    # Index of this process
+    global index
+    index = i
+
+    # Set up server infra
     host, port = server_hierarchy[index]
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10)) # 10 threads
     pb2_grpc.add_ChatServicer_to_server(ChatService(), server) # Add service to server
@@ -277,13 +303,17 @@ def serve(index, server_hierarchy):
     print(f'Server started on host {host} and port {port}' + (' (Replica)' if index > 0 else ''))
 
     # Define replica stubs for primary to communicate with
-    global stubs
-    stubs = [
+    global STUBS
+    STUBS = [
         pb2_grpc.ChatStub(grpc.insecure_channel(f'{host}:{port}'))
-        for host, port
-        in (server_hierarchy[:index] + server_hierarchy[index + 1:])
+        for host, port in server_hierarchy
     ]
 
+    # Start heartbeat with primary replica
+    heartbeat_thread = Thread(target=heartbeat_primary, args=())
+    heartbeat_thread.start()
+
+    # Server waits for termination
     server.wait_for_termination()
 
 
