@@ -33,7 +33,6 @@ def validate_user(username, client):
        reflects an existing user, using client to call server"""
     validate_input(username)
     result = client.list_accounts(username)
-    print(result)
     if str(result).find(f"\"{username}\"") == -1:
         raise inquirer.errors.ValidationError("", reason=f"\"{username}\" is not an existing user.")
     return True
@@ -67,7 +66,7 @@ class ChatClient:
 
         self.primary_index = 0
         self.determine_primary()
-        print(f'Replica {self.primary_index} is chosen as the primary server.')
+        print(f'Replica {self.primary_index} chosen as the primary server.')
 
 
     def create_account(self, username, password):
@@ -161,23 +160,23 @@ class ChatClient:
         - username (str): The username of the account to listen for messages on.
         """
         account = pb2.Account(username=username)
-        # try:
-        messages = self.stub.ListenMessages(account)
-        for msg in messages:
-            format = dedent(f'''
-            ______________________________________________________________
-            New message from {msg.source}:
-            {msg.text}
-            ______________________________________________________________
-            ''')
-            print(format)
+        try:
+            messages = self.stub.ListenMessages(account)
+            for msg in messages:
+                format = dedent(f'''
+                ______________________________________________________________
+                New message from {msg.source}:
+                {msg.text}
+                ______________________________________________________________
+                ''')
+                print(format)
 
         # If we encounter a MultiThreadedRendezvous exception, we know that the current primary replica has gone down
         # So we determine a new primary replica
-        # except grpc._channel._MultiThreadedRendezvous:
-        #     self.determine_primary()
-        #     print(f'Switched to replica {self.primary_index} as primary.')
-        #     self.listen_messages(username)
+        except grpc._channel._MultiThreadedRendezvous:
+            self.determine_primary()
+            print(f'Switched to replica {self.primary_index} as primary.')
+            self.listen_messages(username)
 
     def determine_primary(self):
         """
@@ -189,14 +188,13 @@ class ChatClient:
                 s = self.STUBS[self.primary_index]
                 s.Heartbeat(pb2.NoParam())
                 self.stub = s
-                break
+                return
             except grpc._channel._InactiveRpcError:
                 self.primary_index += 1
 
         # If all servers down, exit with error
-        if self.primary_index == self.NUM_REPLICAS:
-            print("We're sorry, all of our servers are down. Please try again later.")
-            exit(1)
+        print("We're sorry, all of our servers are down. Please try again later.")
+        exit(1)
 
 
 def login_ui(client):

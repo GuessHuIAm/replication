@@ -3,6 +3,10 @@
 ## Replication Paradigm ##
 For simplicity and robustness, we chose to implement a Primary-Secondary Replication Paradigm. This consists of utilizing three `multiprocessing` `Process`es, acting as three, fully functioning synchronized servers, where each process is assigned an index (0, 1, or 2). By default, process 0 is designated the initial primary replica (i.e., the server to which clients communicate directly).
 
+- Synchronization
+
+Synchronization between primary and secondary replicas is done in the following manner: Each action dependent on persistence (account creation, message delivery, account deletion, listing accounts) is first relayed by the primary replica to each of its secondary replicas (all replicas with a higher index than it), the secondary replicas perform those actions and update their databases, and then the primary performs the action itself.
+
 ## Leader Election ##
 Leader election is done in order of lowest index. I.e., the lowest-indexed replica available is chosen to be the primary, and both the client and secondary replicas maintain a continuous heartbeat with the primary replica, transitioning to the next replica in line in the event that a response is not detected from the primary.
 
@@ -11,7 +15,7 @@ Secondary replicas maintain a consistent heartbeat with the primary by using the
 The client maintains a continuous heartbeat with the primary server through the `ListenMessages` rpc, which continuously yields messages to the client. When the client detects a `grpc._channel._MultiThreadedRendezvous` exception, we know that the current primary replica is down, so a new primary replica is chosen through the identical process to the heartbeat mechanism implemented by the secondary replicas. That is, it selects the next available replica (lowest-indexed; availabity ensured through a `Heartbeat` ping) as the replica it will now begin communicating with.
 
 ## Persistence ##
-We chose to persist our chat application using a MySQL server. We chose to use MySQL over SQLite or simply serializing all pertinent data structures into JSON format because of MySQL's compatibility with multiple machines as well as its robustness and capability for incremental updates, rather than having to rewrite the entire JSON file every time information needed to be persisted.
+We chose to persist our chat application using a MySQL server. We chose to use three individual SQLite databases over MySQL or simply serializing all pertinent data structures into JSON format. We did not use MySQL because although MySQL inherently is compatible with multiple machines, solely having one MySQL server would result in one point of failure, rather making our application 2-fault tolerant. We chose not to use a JSON file because instead of having to rewrite the entire JSON file every time information needed to be persisted, SQLite allows for incremental updates and is overall more robust.
 
 ## Other Improvements Over Original ##
 We decided to augment our original gRPC implementation, and some additional improvements include comprehensive validation of inputs such as usernames, IP addresses, and regular expressions; enhanced error handling so that user error does not result in the application crashing in tandem with a noisy, verbose error message in the terminal.

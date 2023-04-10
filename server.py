@@ -17,17 +17,17 @@ class ChatService(pb2_grpc.ChatServicer):
         # Add database and link it to this server
 
         self.conn = sqlite3.connect(f'chat_{index}.db', check_same_thread=False)
-        
+
         cursor = self.conn.cursor()
         cursor.execute('''CREATE TABLE IF NOT EXISTS accounts
                        (username TEXT unique, password TEXT, status INTEGER)''')
         cursor.execute('''CREATE TABLE IF NOT EXISTS messages
                        (source TEXT, destination TEXT, text TEXT)''')
-        cursor.execute('''CREATE TABLE IF NOT EXISTS history 
+        cursor.execute('''CREATE TABLE IF NOT EXISTS history
                        (source TEXT, destination TEXT, text TEXT)''')
         self.conn.commit()
         cursor.close()
-        
+
     def WriteToCommitLog(self, log_name, message):
         '''
         Writes the given message to the commit log.
@@ -50,7 +50,7 @@ class ChatService(pb2_grpc.ChatServicer):
 
         username = request.username
         password = request.password
-        
+
         print(f'CreateAccount called from {index} for {username}.')
 
         cursor = self.conn.cursor()
@@ -85,7 +85,7 @@ class ChatService(pb2_grpc.ChatServicer):
 
         username = request.username
         password = request.password
-        
+
         print(f'DeleteAccount called from {index} for {username}.')
 
         cursor = self.conn.cursor()
@@ -128,7 +128,7 @@ class ChatService(pb2_grpc.ChatServicer):
 
         username = request.username
         password = request.password
-        
+
         print(f'Login called from {index} for {username}.')
 
         cursor = self.conn.cursor()
@@ -172,7 +172,7 @@ class ChatService(pb2_grpc.ChatServicer):
 
         username = request.username
         cursor = self.conn.cursor()
-        
+
         print(f'Logout called from {index} for {username}.')
 
         try:
@@ -199,7 +199,7 @@ class ChatService(pb2_grpc.ChatServicer):
         cursor.execute("SELECT username FROM accounts")
         results = cursor.fetchall()
         cursor.close()
-        
+
         print(f'ListAccounts called from {index} for {searchterm}.')
 
         accounts = [r[0] for r in results]
@@ -209,7 +209,7 @@ class ChatService(pb2_grpc.ChatServicer):
                 accounts_str += account + " "
 
         response = {'usernames': accounts_str[:-1]}
-        
+
         # Replace space with newline character
         response['usernames'] = response['usernames'].replace(' ', ', ')
 
@@ -229,7 +229,7 @@ class ChatService(pb2_grpc.ChatServicer):
         destination = request.destination
         source = request.source
         text = request.text
-        
+
         print(f'SendMessage called from {index} for {source} to {destination}.')
 
         cursor = self.conn.cursor()
@@ -284,9 +284,9 @@ class ChatService(pb2_grpc.ChatServicer):
                 yield pb2.MessageInfo(**response)
                 cursor.execute("DELETE FROM messages WHERE destination = ? AND source = ? AND text = ?", (username, source, text,))
                 cursor.execute("INSERT INTO history VALUES (?, ?, ?)", (username, source, text,))
-                
+
                 print(f'Message from {source} to {username} sent.')
-            
+
             self.conn.commit()
 
         cursor.close()
@@ -361,7 +361,7 @@ if __name__ == '__main__':
     replica_2.start()
 
     # Uncomment below to test swapping between replicas
-    # sleep(10)
-    # print('Primary and replica 1 been terminated, duuude')
-    # primary.terminate()
-    # replica_1.terminate()
+    sleep(10)
+    print('Primary and replica 1 been terminated, duuude')
+    primary.terminate()
+    replica_1.terminate()
