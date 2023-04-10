@@ -23,6 +23,8 @@ We decided to augment our original gRPC implementation, and some additional impr
 
 ## Testing ##
 - Unit Testing
+There was very little possible unit testing for this assignment, so we just performed tests manually just terminating our replicas/processes
+and see how they react.
 
 - Integration Testing
 Manual testing of primary replica failure was done by programmatically terminating replicas by using the `Process.terminate()` and demonstrating that no gap in functionality occurred on the client's end, given that one replica was still functional. An additional test proving synchronization of data was done by creating new accounts when Replica 0 had already failed and Replica 1 became primary, then terminating Replica 1 (thus rendering Replica 2 the new primary), and ensuring that the accounts made previously were still recognized as registered, not new, users.
