@@ -85,6 +85,8 @@ class ChatService(pb2_grpc.ChatServicer):
 
         username = request.username
         password = request.password
+        
+        print(f'DeleteAccount called from {index} for {username}.')
 
         cursor = self.conn.cursor()
 
@@ -99,11 +101,11 @@ class ChatService(pb2_grpc.ChatServicer):
                 response = {'message': result, 'error': False}
             else:
                 # If number of rows deleted is 0, then the username was incorrect
-                result = f"Account deletion error: username '{username}' not found."
+                result = f"Account deletion error: password for '{username}' is incorrect."
                 response = {'message': result, 'error': True}
         except:
             # If the password was incorrect, an exception will be raised
-            result = f"Account deletion error: username '{username}' not found."
+            result = f"Account deletion error: password for '{username}' is incorrect."
             response = {'message': result, 'error': True}
 
         cursor.close()
@@ -126,6 +128,8 @@ class ChatService(pb2_grpc.ChatServicer):
 
         username = request.username
         password = request.password
+        
+        print(f'Login called from {index} for {username}.')
 
         cursor = self.conn.cursor()
 
@@ -168,6 +172,8 @@ class ChatService(pb2_grpc.ChatServicer):
 
         username = request.username
         cursor = self.conn.cursor()
+        
+        print(f'Logout called from {index} for {username}.')
 
         try:
             # Set the status of the account to 0 (logged out)
@@ -193,6 +199,8 @@ class ChatService(pb2_grpc.ChatServicer):
         cursor.execute("SELECT username FROM accounts")
         results = cursor.fetchall()
         cursor.close()
+        
+        print(f'ListAccounts called from {index} for {searchterm}.')
 
         accounts = [r[0] for r in results]
         accounts_str = ""
@@ -201,6 +209,9 @@ class ChatService(pb2_grpc.ChatServicer):
                 accounts_str += account + " "
 
         response = {'usernames': accounts_str[:-1]}
+        
+        # Replace space with newline character
+        response['usernames'] = response['usernames'].replace(' ', ', ')
 
         return pb2.Accounts(**response)
 
@@ -218,6 +229,8 @@ class ChatService(pb2_grpc.ChatServicer):
         destination = request.destination
         source = request.source
         text = request.text
+        
+        print(f'SendMessage called from {index} for {source} to {destination}.')
 
         cursor = self.conn.cursor()
         cursor.execute("SELECT status FROM accounts WHERE username = ?", (source,))
@@ -238,7 +251,7 @@ class ChatService(pb2_grpc.ChatServicer):
 
         try:
             # Add the message to the destination user's queue
-            cursor.execute("INSERT INTO messages VALUES (?, ?, ?)", (destination, source, text,))
+            cursor.execute("INSERT INTO messages VALUES (?, ?, ?)", (source, destination, text,))
             self.conn.commit()
             result = f"Send success: message sent to '{destination}'."
             response = {'message': result, 'error': False}
@@ -256,19 +269,23 @@ class ChatService(pb2_grpc.ChatServicer):
 
         cursor = self.conn.cursor()
         while True:
+            # First, check if the user is logged in
             cursor.execute("SELECT status FROM accounts WHERE username = ?", (username,))
             logged_in = cursor.fetchone()[0]
             if logged_in == 0:
                 break
 
+            # If the user is logged in, check if there are any messages for them
             cursor.execute("SELECT source, text FROM messages WHERE destination = ?", (username,))
             for row in cursor.fetchall():
                 source = row[0]
                 text = row[1]
-                destination = username
-                response = {'source': source, 'text': text, 'destination': destination}
+                response = {'source': source, 'text': text, 'destination': username}
                 yield pb2.MessageInfo(**response)
                 cursor.execute("DELETE FROM messages WHERE destination = ? AND source = ? AND text = ?", (username, source, text,))
+                cursor.execute("INSERT INTO history VALUES (?, ?, ?)", (username, source, text,))
+                
+                print(f'Message from {source} to {username} sent.')
             
             self.conn.commit()
 
@@ -293,7 +310,7 @@ def heartbeat_primary():
             primary_index += 1
 
     # If a replica exits the loop, we know that it has become the primary replica
-    print(f'Replica {index} is now the primary replica')
+    print(f'Replica {index} is now the primary replica.')
 
 
 def serve(i, server_hierarchy):

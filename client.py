@@ -33,6 +33,7 @@ def validate_user(username, client):
        reflects an existing user, using client to call server"""
     validate_input(username)
     result = client.list_accounts(username)
+    print(result)
     if str(result).find(f"\"{username}\"") == -1:
         raise inquirer.errors.ValidationError("", reason=f"\"{username}\" is not an existing user.")
     return True
