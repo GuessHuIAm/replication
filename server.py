@@ -36,12 +36,20 @@ class ChatService(pb2_grpc.ChatServicer):
         If the username already exists, an error is returned.
         '''
         # Sync with all secondary replicas if necessary
-        if is_primary:
-            for s in stubs:
-                try:
-                    s.CreateAccount(request)
-                except grpc._channel._InactiveRpcError:
-                    pass
+        
+        # The NOTPRIMARY logic does not work
+
+        #NOTPRIMARY
+        if not is_primary:
+            result = "ERROR: Wrong Destination"
+            response = {'message': result, 'error': True}
+            return pb2.ServerResponse(**response)
+
+        for s in stubs:
+            try:
+                s.CreateAccount(request)
+            except grpc._channel._InactiveRpcError:
+                pass
 
         username = request.username
         password = request.password

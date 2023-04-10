@@ -51,7 +51,6 @@ class ChatClient:
     def __init__(self, addr):
         """
         Initialize the ChatClient instance.
-
         Args:
         - addr (str): IP address of the host.
         """
@@ -81,11 +80,9 @@ class ChatClient:
     def create_account(self, username, password):
         """
         Create a new account with the specified username and password.
-
         Args:
         - username (str): The username for the new account.
         - password (str): The password for the new account.
-
         Returns:
         - A pb2.ServerResponse object representing the result of the operation.
         """
@@ -95,11 +92,9 @@ class ChatClient:
     def delete_account(self, username, password):
         """
         Delete the account with the specified username and password.
-
         Args:
         - username (str): The username of the account to be deleted.
         - password (str): The password of the account to be deleted.
-
         Returns:
         - A pb2.ServerResponse object representing the result of the operation.
         """
@@ -109,11 +104,9 @@ class ChatClient:
     def login(self, username, password):
         """
         Log in to the account with the specified username and password.
-
         Args:
         - username (str): The username of the account to log in to.
         - password (str): The password of the account to log in to.
-
         Returns:
         - A pb2.ServerResponse object representing the result of the operation.
         """
@@ -123,10 +116,8 @@ class ChatClient:
     def logout(self, username):
         """
         Log out of the account with the specified username.
-
         Args:
         - username (str): The username of the account to log out of.
-
         Returns:
         - A pb2.ServerResponse object representing the result of the operation.
         """
@@ -136,10 +127,8 @@ class ChatClient:
     def list_accounts(self, searchterm):
         """
         Get a list of accounts that match the specified search term.
-
         Args:
         - searchterm (str): The search term to use.
-
         Returns:
         - A pb2.Accounts object representing the accounts list.
         """
@@ -149,12 +138,10 @@ class ChatClient:
     def send_message(self, destination, source, text):
         """
         Send a message to the specified destination.
-
         Args:
         - destination (str): The username of the message recipient.
         - source (str): The username of the message sender.
         - text (str): The text of the message.
-
         Returns:
         - A pb2.ServerResponse object representing the result of the operation.
         """
@@ -164,7 +151,6 @@ class ChatClient:
     def listen_messages(self, username):
         """
         Listen for messages sent to the specified user and print them to the console.
-
         Args:
         - username (str): The username of the account to listen for messages on.
         """
@@ -328,4 +314,3 @@ if __name__ == '__main__':
                     exit(0)
         else:
             print("Invalid action")
-
