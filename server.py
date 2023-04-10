@@ -265,10 +265,11 @@ class ChatService(pb2_grpc.ChatServicer):
             for row in cursor.fetchall():
                 source = row[0]
                 text = row[1]
-                response = {'source': source, 'text': text}
-                yield pb2.Message(**response)
-
-            cursor.execute("DELETE FROM messages WHERE receiver = ? AND source = ? AND text = ?", (username, source, text,))
+                destination = username
+                response = {'source': source, 'text': text, 'destination': destination}
+                yield pb2.MessageInfo(**response)
+                cursor.execute("DELETE FROM messages WHERE destination = ? AND source = ? AND text = ?", (username, source, text,))
+            
             self.conn.commit()
 
         cursor.close()

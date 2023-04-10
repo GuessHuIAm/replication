@@ -122,7 +122,7 @@ class ChatClient:
         - A pb2.ServerResponse object representing the result of the operation.
         """
         account = pb2.Account(username=username, password="")
-        return self.stub.logout(account)
+        return self.stub.Logout(account)
 
     def list_accounts(self, searchterm):
         """
@@ -160,23 +160,23 @@ class ChatClient:
         - username (str): The username of the account to listen for messages on.
         """
         account = pb2.Account(username=username)
-        try:
-            messages = self.stub.ListenMessages(account)
-            for msg in messages:
-                format = dedent(f'''
-                ______________________________________________________________
-                New message from {msg.source}:
-                {msg.text}
-                ______________________________________________________________
-                ''')
-                print(format)
+        # try:
+        messages = self.stub.ListenMessages(account)
+        for msg in messages:
+            format = dedent(f'''
+            ______________________________________________________________
+            New message from {msg.source}:
+            {msg.text}
+            ______________________________________________________________
+            ''')
+            print(format)
 
         # If we encounter a MultiThreadedRendezvous exception, we know that the current primary replica has gone down
         # So we determine a new primary replica
-        except grpc._channel._MultiThreadedRendezvous:
-            self.determine_primary()
-            print(f'Switched to replica {self.primary_index} as primary.')
-            self.listen_messages(username)
+        # except grpc._channel._MultiThreadedRendezvous:
+        #     self.determine_primary()
+        #     print(f'Switched to replica {self.primary_index} as primary.')
+        #     self.listen_messages(username)
 
     def determine_primary(self):
         """
