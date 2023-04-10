@@ -1,7 +1,7 @@
 # Engineering Notebook #
 
 ## Replication Paradigm ##
-For simplicity and robustness, we chose to implement a **Primary-Secondary** Replication Paradigm. This consists of utilizing three multiprocessing `Process`es, acting as three, fully functioning synchronized servers, where each process is given an index (0, 1, or 2). By default, process 0 is designated the initial primary replica (i.e., the server to which clients communicate directly).
+For simplicity and robustness, we chose to implement a Primary-Secondary Replication Paradigm. This consists of utilizing three `multiprocessing` `Process`es, acting as three, fully functioning synchronized servers, where each process is assigned an index (0, 1, or 2). By default, process 0 is designated the initial primary replica (i.e., the server to which clients communicate directly).
 
 ## Leader Election ##
 Leader election is done in order of lowest index. I.e., the lowest-indexed replica available is chosen to be the primary, and both the client and secondary replicas maintain a continuous heartbeat with the primary replica, transitioning to the next replica in line in the event that a response is not detected from the primary.
@@ -23,8 +23,11 @@ We decided to augment our original gRPC implementation, and some additional impr
 
 ## Testing ##
 - Unit Testing
-There was very little possible unit testing for this assignment, so we just performed tests manually just terminating our replicas/processes
-and see how they react.
+
+We performed a number of unit tests on our suite of input validation functions, namely, `validate_input`, `validate_ip`, `validate_user`, and `validate_regex`. We noted that it is rather difficult to perform unit tests on the majority of our program, so much of our testing depended on manually terminating our replicas/processes and see how they react (more details in the following section on Integration Testing).
 
 - Integration Testing
+
 Manual testing of primary replica failure was done by programmatically terminating replicas by using the `Process.terminate()` and demonstrating that no gap in functionality occurred on the client's end, given that one replica was still functional. An additional test proving synchronization of data was done by creating new accounts when Replica 0 had already failed and Replica 1 became primary, then terminating Replica 1 (thus rendering Replica 2 the new primary), and ensuring that the accounts made previously were still recognized as registered, not new, users.
+
+Furthermore, we ran test workflows for each use case dependent on persistence (account creation, message delivery, account deletion, listing accounts) to verify that the appropriate table was being updated in the SQL database, as well as that the correct contents were being read and/or written from it.
