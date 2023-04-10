@@ -161,7 +161,7 @@ class ChatClient:
         """
         account = pb2.Account(username=username)
         try:
-            messages = self.stuSTUBSstenMessages(account)
+            messages = self.stub.ListenMessages(account)
             for msg in messages:
                 format = dedent(f'''
                 ______________________________________________________________

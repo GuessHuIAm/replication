@@ -1,5 +1,5 @@
 import re
-import mysql.connector
+import sqlite3
 from concurrent import futures
 from multiprocessing import Process
 from threading import Thread
@@ -11,21 +11,29 @@ import chat_pb2 as pb2
 import chat_pb2_grpc as pb2_grpc
 from constants import *
 
-accounts_status = {}
 
 class ChatService(pb2_grpc.ChatServicer):
     def __init__(self, *args, **kwargs):
         # Add database and link it to this server
-        self.conn = mysql.connector.connect(**DATABASE)
+
+        self.conn = sqlite3.connect(f'chat_{index}.db', check_same_thread=False)
+        
         cursor = self.conn.cursor()
         cursor.execute('''CREATE TABLE IF NOT EXISTS accounts
-                          (username VARCHAR(255) UNIQUE, password VARCHAR(255), status INT)''')
-        cursor.execute('''CREATE TABLE IF NOT EXISTS history
-                          (source VARCHAR(255), destination VARCHAR(255), message TEXT)''')
+                       (username TEXT unique, password TEXT, status INTEGER)''')
         cursor.execute('''CREATE TABLE IF NOT EXISTS messages
-                          (source VARCHAR(255), destination VARCHAR(255), message TEXT)''')
+                       (source TEXT, destination TEXT, text TEXT)''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS history 
+                       (source TEXT, destination TEXT, text TEXT)''')
         self.conn.commit()
         cursor.close()
+        
+    def WriteToCommitLog(self, log_name, message):
+        '''
+        Writes the given message to the commit log.
+        '''
+        with open('commit.log', 'a') as f:
+            f.write(message)
 
     def CreateAccount(self, request, context):
         '''
@@ -42,12 +50,14 @@ class ChatService(pb2_grpc.ChatServicer):
 
         username = request.username
         password = request.password
+        
+        print(f'CreateAccount called from {index} for {username}.')
 
         cursor = self.conn.cursor()
 
         # Try to insert the new account into the database, if it already exists, return an error
         try:
-            cursor.execute('''INSERT INTO accounts VALUES (%s, %s, %s)''', (username, password, 0))
+            cursor.execute('''INSERT INTO accounts VALUES (?, ?, ?)''', (username, password, 0))
             self.conn.commit()
             result = f"Account creation success: '{username}' added."
             response = {'message': result, 'error': False}
@@ -79,7 +89,7 @@ class ChatService(pb2_grpc.ChatServicer):
         cursor = self.conn.cursor()
 
         try:
-            cursor.execute('''DELETE FROM accounts WHERE username = %s AND password = %s''', (username, password,))
+            cursor.execute('''DELETE FROM accounts WHERE username = ? AND password = ?''', (username, password,))
             deleted = cursor.rowcount
             self.conn.commit()
 
@@ -120,7 +130,7 @@ class ChatService(pb2_grpc.ChatServicer):
         cursor = self.conn.cursor()
 
         # Find the account with the given username
-        cursor.execute('''SELECT * FROM accounts WHERE username = %s''', (username,))
+        cursor.execute('''SELECT * FROM accounts WHERE username = ?''', (username,))
         account = cursor.fetchone()
 
         if account:
@@ -130,7 +140,7 @@ class ChatService(pb2_grpc.ChatServicer):
                 response = {'message': result, 'error': True}
             else:
                 try:
-                    cursor.execute('''UPDATE accounts SET status = 1 WHERE username = %s''', (username,))
+                    cursor.execute('''UPDATE accounts SET status = 1 WHERE username = ?''', (username,))
                     self.conn.commit()
                     result = f"Login success: '{username}' logged in. Welcome!"
                     response = {'message': result, 'error': False}
@@ -161,7 +171,7 @@ class ChatService(pb2_grpc.ChatServicer):
 
         try:
             # Set the status of the account to 0 (logged out)
-            cursor.execute("UPDATE accounts SET status = 0 WHERE username = %s", (username,))
+            cursor.execute("UPDATE accounts SET status = 0 WHERE username = ?", (username,))
             self.conn.commit()
             result = f"Logout success: '{username}' logged out. Goodbye!"
             response = {'message': result, 'error': False}
@@ -210,7 +220,7 @@ class ChatService(pb2_grpc.ChatServicer):
         text = request.text
 
         cursor = self.conn.cursor()
-        cursor.execute("SELECT status FROM accounts WHERE username = %s", (source,))
+        cursor.execute("SELECT status FROM accounts WHERE username = ?", (source,))
         logged_in = cursor.fetchone()[0]
 
         # If the source is not logged in, return an error
@@ -220,7 +230,7 @@ class ChatService(pb2_grpc.ChatServicer):
             return pb2.ServerResponse(**response)
 
         # If the destination is not a valid account, return an error
-        cursor.execute("SELECT username FROM accounts WHERE username = %s", (destination,))
+        cursor.execute("SELECT username FROM accounts WHERE username = ?", (destination,))
         if cursor.fetchone() is None:
             result = f"Send error: destination account '{destination}' does not exist."
             response = {'message': result, 'error': True}
@@ -228,7 +238,7 @@ class ChatService(pb2_grpc.ChatServicer):
 
         try:
             # Add the message to the destination user's queue
-            cursor.execute("INSERT INTO messages VALUES (%s, %s, %s)", (destination, source, text,))
+            cursor.execute("INSERT INTO messages VALUES (?, ?, ?)", (destination, source, text,))
             self.conn.commit()
             result = f"Send success: message sent to '{destination}'."
             response = {'message': result, 'error': False}
@@ -246,19 +256,19 @@ class ChatService(pb2_grpc.ChatServicer):
 
         cursor = self.conn.cursor()
         while True:
-            cursor.execute("SELECT status FROM accounts WHERE username = %s", (username,))
+            cursor.execute("SELECT status FROM accounts WHERE username = ?", (username,))
             logged_in = cursor.fetchone()[0]
             if logged_in == 0:
                 break
 
-            cursor.execute("SELECT source, text FROM messages WHERE destination = %s", (username,))
+            cursor.execute("SELECT source, text FROM messages WHERE destination = ?", (username,))
             for row in cursor.fetchall():
                 source = row[0]
                 text = row[1]
                 response = {'source': source, 'text': text}
                 yield pb2.Message(**response)
 
-            cursor.execute("DELETE FROM messages WHERE receiver = %s AND source = %s AND text = %s", (username, source, text,))
+            cursor.execute("DELETE FROM messages WHERE receiver = ? AND source = ? AND text = ?", (username, source, text,))
             self.conn.commit()
 
         cursor.close()
