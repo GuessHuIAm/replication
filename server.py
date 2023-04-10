@@ -18,7 +18,7 @@ accounts_status = {}
 class ChatService(pb2_grpc.ChatServicer):
     def __init__(self, *args, **kwargs):
         # Add database and link it to this server
-        self.conn = sqlite3.connect(DATABASE)
+        self.conn = sqlite3.connect(DATABASE, check_same_thread=False)
         self.conn.execute('''CREATE TABLE IF NOT EXISTS accounts
                           (username text, password text, status integer)''')
         self.conn.execute('''CREATE TABLE IF NOT EXISTS history

@@ -66,7 +66,7 @@ class ChatClient:
 
         self.primary_index = 0
         self.determine_primary()
-        print(f'Replica {self.primary_index} chosen as primary')
+        print(f'Replica {self.primary_index} is chosen as the primary server.')
 
 
     def create_account(self, username, password):
