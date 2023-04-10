@@ -270,15 +270,18 @@ class ChatService(pb2_grpc.ChatServicer):
 
 def heartbeat_primary():
     """
-    Function that pings primary replica and determines whether it is still functioning.
-    If the primary is no longer functional,
+    Function that pings primary replica and determines whether it is still
+    functioning. If the primary is no longer functional, the next lowest-indexed
+    replica that responds is selected.
     """
     global primary_index
-    while primary_index != index:
+    while primary_index < index:
         try:
             STUBS[primary_index].Heartbeat(pb2.NoParam())
         except grpc._channel._InactiveRpcError:
             primary_index += 1
+
+    # If a replica exits the loop, we know that it has become the primary replica
     print(f'Replica {index} is now the primary replica')
 
 
