@@ -265,6 +265,19 @@ class ChatService(pb2_grpc.ChatServicer):
 
 
     def ListenMessages(self, request, context):
+        # Sync with all secondary replicas if necessary
+        if primary_index == index:
+            def sync_replicas(stub):
+                try:
+                    for _ in stub.ListenMessages(request):
+                        pass
+                except:
+                    pass
+
+            ths = [Thread(target=sync_replicas, args=(s,)) for s in STUBS[index + 1:]]
+            for t in ths:
+                t.start()
+
         username = request.username
 
         cursor = self.conn.cursor()
@@ -294,6 +307,11 @@ class ChatService(pb2_grpc.ChatServicer):
 
     def Heartbeat(self, request, context):
         return pb2.NoParam()
+
+
+    def ContinuousHeartbeat(self, request, context):
+        while True:
+            yield pb2.NoParam()
 
 
 def heartbeat_primary():
@@ -361,7 +379,9 @@ if __name__ == '__main__':
     replica_2.start()
 
     # Uncomment below to test swapping between replicas
-    sleep(10)
-    print('Primary and replica 1 been terminated, duuude')
+    sleep(30)
+    print('Primary been terminated, duuude')
     primary.terminate()
+    sleep(30)
+    print('Replica 1 been terminated, duuude')
     replica_1.terminate()

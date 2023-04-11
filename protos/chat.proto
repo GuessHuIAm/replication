@@ -10,6 +10,7 @@ service Chat{
     rpc SendMessage(MessageInfo) returns (ServerResponse) {}
     rpc ListenMessages(Account) returns (stream MessageInfo) {}
     rpc Heartbeat(NoParam) returns (NoParam) {}
+    rpc ContinuousHeartbeat(NoParam) returns (stream NoParam) {}
 }
 
 message NoParam {

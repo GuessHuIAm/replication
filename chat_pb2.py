@@ -11,7 +11,9 @@ from google.protobuf import symbol_database as _symbol_database
 _sym_db = _symbol_database.Default()
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nchat.proto\"\t\n\x07NoParam\"-\n\x07\x41\x63\x63ount\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\"\x1d\n\x08\x41\x63\x63ounts\x12\x11\n\tusernames\x18\x01 \x01(\t\"0\n\x0eServerResponse\x12\x0f\n\x07message\x18\x01 \x01(\t\x12\r\n\x05\x65rror\x18\x02 \x01(\x08\"@\n\x0bMessageInfo\x12\x13\n\x0b\x64\x65stination\x18\x01 \x01(\t\x12\x0e\n\x06source\x18\x02 \x01(\t\x12\x0c\n\x04text\x18\x03 \x01(\t\" \n\nSearchTerm\x12\x12\n\nsearchterm\x18\x01 \x01(\t2\xda\x02\n\x04\x43hat\x12,\n\rCreateAccount\x12\x08.Account\x1a\x0f.ServerResponse\"\x00\x12,\n\rDeleteAccount\x12\x08.Account\x1a\x0f.ServerResponse\"\x00\x12$\n\x05Login\x12\x08.Account\x1a\x0f.ServerResponse\"\x00\x12%\n\x06Logout\x12\x08.Account\x1a\x0f.ServerResponse\"\x00\x12(\n\x0cListAccounts\x12\x0b.SearchTerm\x1a\t.Accounts\"\x00\x12.\n\x0bSendMessage\x12\x0c.MessageInfo\x1a\x0f.ServerResponse\"\x00\x12,\n\x0eListenMessages\x12\x08.Account\x1a\x0c.MessageInfo\"\x00\x30\x01\x12!\n\tHeartbeat\x12\x08.NoParam\x1a\x08.NoParam\"\x00\x62\x06proto3')
+
+
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nchat.proto\"\t\n\x07NoParam\"-\n\x07\x41\x63\x63ount\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\"\x1d\n\x08\x41\x63\x63ounts\x12\x11\n\tusernames\x18\x01 \x01(\t\"0\n\x0eServerResponse\x12\x0f\n\x07message\x18\x01 \x01(\t\x12\r\n\x05\x65rror\x18\x02 \x01(\x08\"@\n\x0bMessageInfo\x12\x13\n\x0b\x64\x65stination\x18\x01 \x01(\t\x12\x0e\n\x06source\x18\x02 \x01(\t\x12\x0c\n\x04text\x18\x03 \x01(\t\" \n\nSearchTerm\x12\x12\n\nsearchterm\x18\x01 \x01(\t2\x89\x03\n\x04\x43hat\x12,\n\rCreateAccount\x12\x08.Account\x1a\x0f.ServerResponse\"\x00\x12,\n\rDeleteAccount\x12\x08.Account\x1a\x0f.ServerResponse\"\x00\x12$\n\x05Login\x12\x08.Account\x1a\x0f.ServerResponse\"\x00\x12%\n\x06Logout\x12\x08.Account\x1a\x0f.ServerResponse\"\x00\x12(\n\x0cListAccounts\x12\x0b.SearchTerm\x1a\t.Accounts\"\x00\x12.\n\x0bSendMessage\x12\x0c.MessageInfo\x1a\x0f.ServerResponse\"\x00\x12,\n\x0eListenMessages\x12\x08.Account\x1a\x0c.MessageInfo\"\x00\x30\x01\x12!\n\tHeartbeat\x12\x08.NoParam\x1a\x08.NoParam\"\x00\x12-\n\x13\x43ontinuousHeartbeat\x12\x08.NoParam\x1a\x08.NoParam\"\x00\x30\x01\x62\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'chat_pb2', globals())
@@ -31,5 +33,5 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _SEARCHTERM._serialized_start=219
   _SEARCHTERM._serialized_end=251
   _CHAT._serialized_start=254
-  _CHAT._serialized_end=600
+  _CHAT._serialized_end=647
 # @@protoc_insertion_point(module_scope)
